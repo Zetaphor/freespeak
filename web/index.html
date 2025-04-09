@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Dictation</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+  <div id="app">
+    <div id="status-bar">
+      <div id="mic-status">Requesting Microphone Access...</div>
+      <div id="vad-status">VAD: Inactive</div>
+    </div>
+
+    <div id="controls">
+      <button id="toggle-mic">Start Recording</button>
+    </div>
+
+    <div id="settings">
+      <h2>Settings</h2>
+      <!-- Settings will be added here -->
+    </div>
+  </div>
+
+  <script src="js/audio.js"></script>
+  <script src="js/vad.js"></script>
+  <script src="js/stt.js"></script>
+  <script src="js/main.js"></script>
+</body>
+
+</html>

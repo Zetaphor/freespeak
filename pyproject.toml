@@ -1,0 +1,26 @@
+[project]
+name = "voice-dictation"
+version = "0.1.0"
+description = "Voice dictation application for Fedora Linux/Wayland"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6",
+    "PyQt6-WebEngine",
+    "dbus-python",
+    "pydbus",
+    "PyGObject",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "ruff",
+    "pytest",
+]
+
+[tool.ruff]
+select = ["E", "F", "I"]
+line-length = 100
+
+[tool.black]
+line-length = 100
