@@ -40,6 +40,8 @@ PUNCTUATION = {
     "period": ".",
     "exclamation mark": "!",
     "question mark": "?",
+    "open quote": '"',
+    "close quote": '"',
 }
 
 # Change this if necessary:
@@ -49,35 +51,66 @@ language = "en-US"
 def langtool_process(text):
     print("<<<< " + text)
 
-    # Fix up punctuation first because the grammar parser works better:
-    for match, replacement in PUNCTUATION.items():
-        # Use case-insensitive matching (i)
-        # Capture whitespace BEFORE the optional single space (\s*) - group 1
-        # Capture an optional single space immediately before the match (\s?) - group 2
-        # Match the punctuation word (escaped)
-        # Use a positive lookahead (?=...) for context.
-        # Replace with group 1 + punctuation symbol. This removes the single
-        # space captured by group 2 if it existed.
-        pattern = rf"(?i)(\s*)(\s?){re.escape(match)}(?=\s+|[.,?!]|$)"
-        text = re.sub(pattern, lambda x: x.group(1) + replacement, text)
+    processed_text = text
+    # --- Step 1: Replace punctuation words ---
+    # This loop replaces spoken punctuation (e.g., "period") with symbols (e.g., ".")
+    # It also handles removing preceding whitespace and an optional succeeding period.
+    for match_word, replacement_char in PUNCTUATION.items():
+        # Pattern 1: Handles cases with preceding whitespace.
+        # Matches one or more spaces (\s+), the punctuation word (\bword\b),
+        # and an optional literal period (\.?) immediately after the word.
+        # Example matches: " period", "   period", " period."
+        # Replaces the entire match with just the replacement_char.
+        pattern_space = rf"(?i)(\s+)\b{re.escape(match_word)}\b(\.?)"
+        processed_text = re.sub(pattern_space, replacement_char, processed_text)
 
+        # Pattern 2: Handles cases at the start of the string.
+        # Matches the punctuation word (\bword\b) at the beginning (^)
+        # and an optional literal period (\.?) immediately after the word.
+        # Example matches: "Period", "Period."
+        # Replaces the entire match with just the replacement_char.
+        pattern_start = rf"(?i)^\b{re.escape(match_word)}\b(\.?)"
+        processed_text = re.sub(pattern_start, replacement_char, processed_text)
+
+    # --- Step 2a: Basic Cleanup ---
+    # Remove any remaining spaces before punctuation marks that might have been missed
+    # or introduced by other means. Example: "hello ." -> "hello."
+    processed_text = re.sub(r'\s+([.,?!])', r'\1', processed_text)
+    # Remove duplicate punctuation that might result from replacements.
+    # Example: "end. period" -> "end.." (after step 1) -> "end." (here)
+    processed_text = re.sub(r'([.,?!])\1+', r'\1', processed_text)
+
+    # --- Step 2b: Comma-Specific Cleanup ---
+    # If replacing "comma." resulted in ", UppercaseWord", lowercase the word.
+    # Pattern: Matches a comma (,), followed by one or more spaces (\s+),
+    # followed by an uppercase letter ([A-Z]) that starts a word (\b).
+    # Replacement: Uses a lambda function to keep the comma and space(s) (group 1)
+    # and append the lowercase version of the captured uppercase letter (group 2).
+    processed_text = re.sub(r'(,\s+)(\b[A-Z])', lambda m: m.group(1) + m.group(2).lower(), processed_text)
+
+
+    # --- Step 3: LanguageTool processing ---
     # Iterate langtool while it finds additional changes (or 3 tries):
     tries = 3
+    final_text = processed_text # Initialize final_text
     while True:
-        new_text = langtool(text, language)
-        if new_text == text or not tries:
+        # Pass the punctuation-processed text to LanguageTool
+        new_text = langtool(processed_text, language)
+        if new_text == processed_text or not tries:
+            final_text = new_text # Store the final result
             break
         else:
-            text = new_text
+            # Update text for the next LanguageTool iteration
+            processed_text = new_text
 
         tries -= 1
 
-    print(">>>> " + new_text)
+    print(">>>> " + final_text)
 
-    return new_text
+    return final_text
 
 
-# Simple API function.  Documentation:
+# Simple API function. Documentation:
 #    https://languagetool.org/http-api/swagger-ui/#!/default/post_check
 def langtool(text, language):
     try:
