@@ -8,7 +8,7 @@ I built this as an simple alternative to [Talon](https://talonvoice.com) since t
 
 *   **DBus Control:** Exposes a DBus interface (`org.voice.Dictation`) for potential external control (e.g., toggling recording). Includes a shell script to toggle recording that can be bound to a hotkey.
 *   **Voice Activity Detection (VAD):** Only processes audio when speech is detected.
-*   **Grammar Correction:** Leverages LanguageTool (`src/langtool.py`) to improve punctuation and grammar of the transcribed text.
+*   **Grammar Correction:** Leverages a local [LanguageTool](https://dev.languagetool.org/) server to improve punctuation and grammar of the transcribed text.
 *   **System-Wide Typing:** Uses `ydotool` to simulate keyboard input, allowing dictation into any application.
 
 ## Installation
@@ -61,7 +61,7 @@ I built this as an simple alternative to [Talon](https://talonvoice.com) since t
 
     You will need to restart your computer for the change to take effect.
 
-    Finally, ydotool works with a daemon that you leave running in the background, ydotoold, for performance reasons. You needs to run ydotoold before you start using ydotool.
+    Finally, ydotool works with a daemon that you leave running in the background, ydotoold, for performance reasons. You need to run ydotoold before you start using ydotool.
 
     ```bash
     systemctl --user enable ydotoold.service
