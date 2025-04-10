@@ -1,12 +1,7 @@
 import torch
 import numpy as np
-# Remove transformers imports
-# from transformers import AutoProcessor, MoonshineForConditionalGeneration
 import base64
-# Remove struct import
-# import struct
 import time
-# Add NeMo, soundfile, tempfile, os, json imports
 import nemo.collections.asr.models as nemo_asr
 import soundfile as sf
 import tempfile
@@ -16,7 +11,6 @@ import io
 
 # Global cache for model
 model = None
-# Processor is not needed for Canary
 
 def initialize_model():
     """Loads the Canary ASR model."""
@@ -53,11 +47,6 @@ class Transcriber:
         if model is None:
             raise RuntimeError("Canary ASR Model could not be initialized.")
         self.device = model.device # Store the device the model is on
-
-    # Remove _base64_to_float32_numpy as we handle bytes directly now
-    # def _base64_to_float32_numpy(self, base64_string: str) -> np.ndarray:
-    #     """Decodes a Base64 string into a NumPy array of float32."""
-    #     # ... (old implementation)
 
     def transcribe_base64(self, base64_audio_data: str) -> tuple[str, float]:
         """
@@ -169,8 +158,6 @@ class Transcriber:
 
 
             print(f"Transcription generated in {transcription_time:.2f} seconds.")
-            # Print the raw result for debugging if needed
-            # print(f"RAW TRANSCRIPTION: {hypotheses[0]}")
             print(f"Transcription Result: {transcription}")
             return transcription, transcription_time
 
