@@ -81,8 +81,8 @@ I built this as an simple alternative to [Talon](https://talonvoice.com) since t
     You will want to add the ngram dataset for your language to improve the grammar correction.
 
     > LanguageTool can make use of large n-gram data sets to detect errors with words that are often confused, like their and there.
-    >
-    > Source: https://dev.languagetool.org/finding-errors-using-n-gram-data
+
+    Source: https://dev.languagetool.org/finding-errors-using-n-gram-data
 
     [Download](http://languagetool.org/download/ngram-data/) the ngram dataset for your language and put it in the `languagetool/ngrams` directory.
 
@@ -105,7 +105,7 @@ I built this as an simple alternative to [Talon](https://talonvoice.com) since t
     > -   `spelling.txt`: words that the spell checker will ignore and use to generate corrections if someone types a similar word
     > -   `ignore.txt`: words that the spell checker will ignore but not use to generate corrections
     > -   `prohibited.txt`: words that should be considered incorrect even though the spell checker would accept them
-    >
-    > Source: https://dev.languagetool.org/hunspell-support
+
+    Source: https://dev.languagetool.org/hunspell-support
 
     These files are in the `languagetool/` directory.
