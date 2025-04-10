@@ -11,9 +11,10 @@ class WebPage(QWebEnginePage):
         print(f"Console[{level}]: {message} (line {line}, source: {source})")
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, server_url):
         super().__init__()
         self.setWindowTitle("Voice Dictation")
+        self.server_url = server_url
         self.setup_tray()
         self.setup_ui()
         self._is_recording = False
@@ -53,12 +54,13 @@ class MainWindow(QMainWindow):
 
         # Enable developer tools and permissions
         profile = QWebEngineProfile.defaultProfile()
-        profile.setHttpUserAgent("Chrome/120.0.0.0")
 
         settings = self.web_view.settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
+        os.environ["QTWEBENGINE_REMOTE_DEBUGGING"] = "9222"
 
         # Create custom page with permission handling
         page = WebPage(profile, self.web_view)
@@ -71,28 +73,37 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self.web_view)
 
-        # Get absolute path to web content
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(current_dir)
-        html_path = os.path.join(project_root, "web", "index.html")
-
-        # Convert to file URL and load
-        url = QUrl.fromLocalFile(html_path)
-        self.web_view.setUrl(url)
+        print(f"Loading URL: {self.server_url}")
+        self.web_view.setUrl(QUrl(self.server_url))
 
         # Add JavaScript bridge to monitor mic status
         js_code = """
-        if (window.audioManager) {
-            window.audioManager.onMicStatusChange = (isActive) => {
-                // Call the Python slot directly
-                window.mainWindow.on_mic_status_changed(isActive);
-            };
-        }
-        window.toggleRecording = () => {
-            if (window.audioManager) {
-                window.audioManager.toggleRecording();
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.qt && window.qt.webChannelTransport) {
+                 new QWebChannel(qt.webChannelTransport, function(channel) {
+                    console.log("QWebChannel connected.");
+                    window.mainWindow = channel.objects.mainWindow;
+
+                    if (window.audioManager) {
+                        console.log("Setting up audioManager listener.");
+                        window.audioManager.onMicStatusChange = (isActive) => {
+                            console.log("Mic status changed in JS:", isActive);
+                            window.mainWindow.on_mic_status_changed(isActive);
+                        };
+                    } else {
+                        console.error("window.audioManager not found after QWebChannel setup.");
+                    }
+
+                    window.toggleRecording = () => {
+                        if (window.audioManager) {
+                            window.audioManager.toggleRecording();
+                        }
+                    };
+                });
+            } else {
+                console.error("QWebChannel transport not ready.");
             }
-        };
+        });
         """
 
         # Add the Python object to JavaScript
@@ -100,19 +111,18 @@ class MainWindow(QMainWindow):
         self.web_view.page().setWebChannel(self.web_channel)
         self.web_channel.registerObject("mainWindow", self)
 
-        # Inject the channel setup code before our mic status code
-        channel_js = """
-        new QWebChannel(qt.webChannelTransport, function(channel) {
-            window.mainWindow = channel.objects.mainWindow;
-        });
-        """
-        self.web_view.page().runJavaScript(channel_js)
-        self.web_view.page().runJavaScript(js_code)
+        self.web_view.loadFinished.connect(lambda ok: self.inject_js_bridge(ok, js_code))
+
+    def inject_js_bridge(self, ok, js_code):
+        if ok:
+            print("Web view finished loading. Injecting JS bridge.")
+            self.web_view.page().runJavaScript(js_code)
+        else:
+            print("Web view failed to load.")
 
     def handle_permission_request(self, origin, feature):
         print(f"Permission requested: {feature} from {origin.toString()}")
-        # Check for MediaAudioCapture feature
-        if feature == QWebEnginePage.Feature.MediaAudioCapture:  # Changed from feature == 2
+        if feature == QWebEnginePage.Feature.MediaAudioCapture:
             print("Granting microphone permission")
             self.web_view.page().setFeaturePermission(
                 origin,
@@ -134,7 +144,7 @@ class MainWindow(QMainWindow):
         menu.exec(self.web_view.mapToGlobal(position))
 
     def open_dev_tools(self):
-        self.web_view.page().setInspectedPage(self.web_view.page())
+        print(f"DevTools available via browser at chrome://inspect/#devices (Port {os.environ.get('QTWEBENGINE_REMOTE_DEBUGGING', 'N/A')})")
 
         js_code = """
         console.log('Debug mode enabled');
