@@ -77,7 +77,7 @@ def handle_audio_transcription(base64_audio_data: str, transcriber: Transcriber)
         if processed_transcription: # Only type if there's text
             try:
                 logger.debug(f"Typing text: '{processed_transcription}'")
-                subprocess.run(['ydotool', 'type', '--next-delay', '0', processed_transcription], check=True)
+                subprocess.run(['ydotool', 'type', '--key-delay', '0', processed_transcription], check=True)
                 logger.debug("Typing completed successfully.")
             except FileNotFoundError:
                 logger.error("Main: Error - 'ydotool' command not found. Please install ydotool.")
