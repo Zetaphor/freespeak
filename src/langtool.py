@@ -1,36 +1,3 @@
-# This example has minimal configuration and lets Language Tool do the work to
-# make it look right. (I am not at all affiliated with Language tool, I just
-# found it useful to work with nerd-dictation.)
-#
-# Language Tool is a free service (or local server for the paranoid!) for low
-# request volume and I have added it to my nerd-dictation configuration to
-# correct and add punctuation where necessary.  I have found that it makes far,
-# far less manual editing in the result of the spoken text:
-#   https://languagetool.org/
-#
-# Here is a simple example:
-#
-# Raw spoken input:
-#    can we go to costa rica in june question mark it is for my son's twelfth
-#    birthday and i hope we have a lot of fun period
-#
-# This is the result without editing:
-#    Can we go to Costa Rica in June? It is for my son's twelfth birthday and
-#    I hope we have a lot of fun.
-#
-# For which the following rules were applied:
-#    Rule: UPPERCASE_SENTENCE_START
-#    Rule: EN_SPECIFIC_CASE
-#    Rule: MORFOLOGIK_RULE_EN_US
-#    Rule: UPPERCASE_SENTENCE_START
-#    Rule: I_LOWERCASE
-#
-# nerd-dictation was invoked as follows:
-#    ./nerd-dictation begin --config ./examples/language_tool/nerd-dictation.py
-#
-# I used the Vosk model vosk-model-en-us-0.22-lgraph, but it probably does not
-# matter which model you use.
-
 import re
 import requests
 from pprint import pprint
@@ -76,9 +43,13 @@ def langtool_process(text):
     # Remove any remaining spaces before punctuation marks that might have been missed
     # or introduced by other means. Example: "hello ." -> "hello."
     processed_text = re.sub(r'\s+([.,?!])', r'\1', processed_text)
-    # Remove duplicate punctuation that might result from replacements.
-    # Example: "end. period" -> "end.." (after step 1) -> "end." (here)
-    processed_text = re.sub(r'([.,?!])\1+', r'\1', processed_text)
+    # Remove duplicate punctuation or combinations resulting from replacements.
+    # Keeps only the *last* punctuation mark in a sequence.
+    # Example: "end. period" -> "end.." -> "end."
+    # Example: "awesome. exclamation mark" -> "awesome.!" -> "awesome!"
+    # Example: "Wait! period" -> "Wait!." -> "Wait."
+    # Example: "really??? " -> "really?"
+    processed_text = re.sub(r'([.,?!])([.,?!])+', r'\2', processed_text)
 
     # --- Step 2b: Comma-Specific Cleanup ---
     # If replacing "comma." resulted in ", UppercaseWord", lowercase the word.
