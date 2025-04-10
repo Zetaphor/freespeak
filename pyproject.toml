@@ -11,6 +11,8 @@ dependencies = [
     "PyGObject",
     "torch",
     "transformers",
+    "nemo_toolkit[all]",
+    "soundfile",
 ]
 
 [project.optional-dependencies]
