@@ -7,6 +7,9 @@ from PyQt6.QtGui import QIcon
 import os
 from loguru import logger
 
+# Import the new overlay class
+from overlay import RecordingOverlay
+
 
 class WebPage(QWebEnginePage):
     def javaScriptConsoleMessage(self, level, message, line, source):
@@ -36,6 +39,11 @@ class MainWindow(QMainWindow):
         self.setup_tray()
         self.setup_ui()
         self._is_recording = False
+
+        # Create the recording overlay indicator
+        self.recording_overlay = RecordingOverlay()
+        logger.debug("Recording overlay created.")
+
         logger.debug("MainWindow initialized.")
 
     def setup_tray(self):
@@ -67,6 +75,9 @@ class MainWindow(QMainWindow):
 
     def quit_application(self):
         logger.info("Quit action triggered from tray icon.")
+        # Ensure overlay is hidden/closed when quitting
+        if self.recording_overlay:
+            self.recording_overlay.close()
         QApplication.quit()
 
     def closeEvent(self, event):
@@ -74,6 +85,9 @@ class MainWindow(QMainWindow):
         logger.debug("Close event triggered, hiding window to tray.")
         event.ignore()
         self.hide()
+        # Keep the overlay visible even when the main window is hidden,
+        # as recording might still be active via DBus.
+        # The overlay will be closed by quit_application.
 
     def setup_ui(self):
         logger.debug("Setting up UI (QWebEngineView)...")
@@ -250,9 +264,17 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(bool)
     def on_mic_status_changed(self, is_active: bool):
+        """Handles mic status updates from JS and shows/hides the overlay."""
         logger.info(f"MainWindow: Received mic status update from JS: {is_active}")
         self._is_recording = is_active
-        # Optionally update tray icon or UI based on status here
+        # Show or hide the overlay based on the status
+        if is_active:
+            logger.debug("Showing recording overlay.")
+            self.recording_overlay.show()
+        else:
+            logger.debug("Hiding recording overlay.")
+            self.recording_overlay.hide()
+        # Optionally update tray icon or other UI based on status here
 
     @pyqtSlot(str)
     def transcribe_audio_b64(self, base64_audio_data: str):
