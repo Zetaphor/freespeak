@@ -13,6 +13,7 @@ dependencies = [
     "transformers",
     "nemo_toolkit[all]",
     "soundfile",
+    "loguru",
 ]
 
 [project.optional-dependencies]
