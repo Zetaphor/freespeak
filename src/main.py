@@ -111,7 +111,7 @@ def main():
     service = DictationService(window)
     session_bus.publish("org.voice.Dictation", service)
 
-    window.show()
+    # window.show() # Remove this line to start hidden
     sys.exit(app.exec())
 
 if __name__ == "__main__":
