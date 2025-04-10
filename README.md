@@ -97,3 +97,13 @@ I built this as an simple alternative to [Talon](https://talonvoice.com) since t
     │  │  ├─ 2grams/
     │  │  ├─ 3grams/
     ```
+
+    ### Improving the spell checker
+
+    > You can improve the spell checker without touching the dictionary. For single words (no spaces), you can add your words to one of these files:
+    > -   `spelling.txt`: words that the spell checker will ignore and use to generate corrections if someone types a similar word
+    > -   `ignore.txt`: words that the spell checker will ignore but not use to generate corrections
+    > -   `prohibited.txt`: words that should be considered incorrect even though the spell checker would accept them
+    > Source: https://dev.languagetool.org/hunspell-support
+
+    These files are in the `languagetool/` directory.
