@@ -7,10 +7,13 @@ import http.server
 import socketserver
 import threading
 import time
+import subprocess # Add subprocess import here
 
 from window import MainWindow
 from dbus_service import DictationService
 from transcriber import Transcriber
+# Import langtool here
+from langtool import langtool_process
 
 PORT = 8080 # Choose an available port
 
@@ -44,6 +47,35 @@ def start_server():
         print("Please check if the port is already in use or wait a moment.")
         sys.exit(1) # Exit if server cannot start
 
+# Define the handler function for received audio
+def handle_audio_transcription(base64_audio_data: str, transcriber: Transcriber):
+    """
+    Handles transcription, processing, and typing of the received audio data.
+    """
+    print("Main: Handling audio transcription...")
+    if transcriber:
+        # Run transcription
+        raw_transcription, transcription_time = transcriber.transcribe_base64(base64_audio_data)
+        print(f"RAW TRANSCRIPTION: {raw_transcription}")
+        print(f"Transcription time: {transcription_time:.2f} seconds")
+
+        # Process the transcription with LanguageTool
+        processed_transcription = langtool_process(raw_transcription)
+        print(f"PROCESSED TRANSCRIPTION: {processed_transcription}")
+
+        # Type the processed transcription using ydotool
+        if processed_transcription: # Only type if there's text
+            try:
+                subprocess.run(['ydotool', 'type', '--next-delay', '0', processed_transcription], check=True)
+            except FileNotFoundError:
+                print("Main: Error - 'ydotool' command not found. Please install ydotool.")
+            except subprocess.CalledProcessError as e:
+                print(f"Main: Error running ydotool: {e}")
+                print("Ensure the ydotoold service is running (`systemctl --user start ydotoold`).")
+            except Exception as e:
+                print(f"Main: An unexpected error occurred during typing: {e}")
+        else:
+            print("Main: No processed text to type.")
 
 def main():
     app = QApplication(sys.argv)
@@ -56,7 +88,7 @@ def main():
 
     try:
         print("Initializing Transcriber...")
-        transcriber = Transcriber()
+        transcriber = Transcriber() # Keep transcriber initialization here
         print("Transcriber initialized successfully.")
     except RuntimeError as e:
         print(f"Fatal Error: {e}")
@@ -68,8 +100,12 @@ def main():
 
     # Set up DBus service
     session_bus = SessionBus()
-    # Pass the server URL and transcriber instance to the MainWindow
-    window = MainWindow(server_url, transcriber)
+    # Remove the transcriber instance from the MainWindow constructor call
+    window = MainWindow(server_url)
+
+    # Connect the window's signal to the handler function
+    # Use a lambda to pass the transcriber instance to the handler
+    window.audioReceived.connect(lambda audio_data: handle_audio_transcription(audio_data, transcriber))
 
     # Create DBus service instance and publish it
     service = DictationService(window)

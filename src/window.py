@@ -243,10 +243,3 @@ class MainWindow(QMainWindow):
         print("MainWindow: Received audio data via QWebChannel. Emitting signal.")
         # Emit the signal with the audio data
         self.audioReceived.emit(base64_audio_data)
-        # Remove the transcription, langtool processing, and ydotool logic from here
-        # if self.transcriber:
-        #     # Run transcription
-        #     raw_transcription, transcription_time = self.transcriber.transcribe_base64(base64_audio_data)
-        #     # ... (removed transcription logic) ...
-        # else:
-        #     print("MainWindow: Error - Transcriber not available.") # This check is no longer needed here
