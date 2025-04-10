@@ -21,12 +21,14 @@ class AudioManager {
     // Initialize
     console.log('Requesting microphone access...');
     this.requestMicrophoneAccess();
+
+    // Add VAD integration
+    this.vadManager = window.vadManager;
   }
 
   async requestMicrophoneAccess() {
     try {
       console.log('Checking for mediaDevices API:', !!navigator.mediaDevices);
-      // Request default audio device
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -38,6 +40,9 @@ class AudioManager {
       console.log('Got audio stream:', !!this.stream);
       this.micStatus.textContent = 'Microphone: Ready';
       this.toggleButton.disabled = false;
+
+      // Initialize VAD with stream
+      await this.vadManager.initialize(this.stream);
 
     } catch (error) {
       console.error('Error accessing microphone:', error);
@@ -55,14 +60,19 @@ class AudioManager {
       this.toggleButton.textContent = 'Stop Recording';
       this.toggleButton.style.backgroundColor = '#dc3545';
       this.micStatus.textContent = 'Microphone: Recording';
-      // Emit recording started event for VAD/STT
+      this.vadManager.start();
       window.dispatchEvent(new CustomEvent('recordingStarted', { detail: this.stream }));
     } else {
       this.toggleButton.textContent = 'Start Recording';
       this.toggleButton.style.backgroundColor = '#007bff';
       this.micStatus.textContent = 'Microphone: Ready';
-      // Emit recording stopped event
+      this.vadManager.stop();
       window.dispatchEvent(new CustomEvent('recordingStopped'));
+    }
+
+    // Notify Qt application of status change
+    if (this.onMicStatusChange) {
+      this.onMicStatusChange(this.isRecording);
     }
   }
 

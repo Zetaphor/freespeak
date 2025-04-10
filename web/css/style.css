@@ -45,3 +45,50 @@ button {
 button:hover {
   background: #0056b3;
 }
+
+.settings-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.settings-section h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+}
+
+.setting-group {
+  margin-bottom: 12px;
+}
+
+.setting-group label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.range-with-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.range-with-value input[type="range"] {
+  flex: 1;
+}
+
+.range-with-value span {
+  min-width: 2.5em;
+  text-align: right;
+}
+
+#audio-output {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#audio-output audio {
+  width: 100%;
+}
