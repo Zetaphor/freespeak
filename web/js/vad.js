@@ -1,17 +1,70 @@
+// Helper functions to convert Float32Array to WAV Blob
+function float32ArrayToWavBlob(audioData, sampleRate = 16000) { // Assuming 16kHz sample rate from VAD
+  const format = 1; // PCM
+  const numChannels = 1;
+  const bitDepth = 16; // Convert Float32 to Int16 for WAV
+
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = audioData.length * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataSize); // 44 bytes for header
+  const view = new DataView(buffer);
+
+  // RIFF chunk descriptor
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true); // ChunkSize
+  writeString(view, 8, 'WAVE');
+
+  // fmt sub-chunk
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
+  view.setUint16(20, format, true); // AudioFormat
+  view.setUint16(22, numChannels, true); // NumChannels
+  view.setUint32(24, sampleRate, true); // SampleRate
+  view.setUint32(28, byteRate, true); // ByteRate
+  view.setUint16(32, blockAlign, true); // BlockAlign
+  view.setUint16(34, bitDepth, true); // BitsPerSample
+
+  // data sub-chunk
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataSize, true); // Subchunk2Size
+
+  // Write actual audio data (converting Float32 to Int16)
+  floatTo16BitPCM(view, 44, audioData);
+
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+function writeString(view, offset, string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+function floatTo16BitPCM(output, offset, input) {
+  for (let i = 0; i < input.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    // Convert to 16-bit integer
+    output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+}
+
 class VADManager {
   constructor() {
     this.vad = null;
-    this.audioContext = null;
-    this.mediaStreamSource = null;
+    // No longer need MediaRecorder related properties for VAD
+    // this.audioContext = null;
+    // this.mediaStreamSource = null;
     this.speaking = false;
-    this.audioChunks = [];
+    // this.audioChunks = []; // Removed
     this.startTime = null;
-    this.audioRecorder = null;
-    this.processingSegment = false; // Flag to indicate if stop is for segment processing
+    // this.audioRecorder = null; // Removed (unless needed for other purposes)
+    // this.processingSegment = false; // Removed
 
     // Settings
-    this.minSpeakingDuration = 500;
-    this.minAudioDuration = 1000;
+    this.minSpeakingDuration = 500; // Used to check time between speech start/end events
+    this.minAudioDuration = 1000; // Used to check final WAV blob duration
     this.sensitivity = 0.8;
 
     // DOM elements
@@ -30,12 +83,20 @@ class VADManager {
       this.sensitivity = parseFloat(e.target.value);
       this.sensitivityValue.textContent = this.sensitivity;
       if (this.vad) {
+        // Update VAD threshold dynamically
         this.vad.options.threshold = this.sensitivity;
       }
     });
 
     this.minSpeakingInput.addEventListener('input', (e) => {
       this.minSpeakingDuration = parseInt(e.target.value);
+      // Update VAD positive/negative speech thresholds dynamically
+      if (this.vad) {
+        const durationSeconds = this.minSpeakingDuration / 1000;
+        this.vad.options.positiveSpeechThreshold = durationSeconds;
+        // Keep negative threshold same or adjust as needed
+        this.vad.options.negativeSpeechThreshold = durationSeconds;
+      }
     });
 
     this.minAudioInput.addEventListener('input', (e) => {
@@ -43,73 +104,29 @@ class VADManager {
     });
   }
 
+  // Stream is still needed for MicVAD initialization
   async initialize(stream) {
     try {
       // Initialize VAD
       this.vad = await vad.MicVAD.new({
+        // Pass the stream directly to MicVAD
+        stream: stream,
+        // VAD settings from properties
         positiveSpeechThreshold: this.minSpeakingDuration / 1000,
         negativeSpeechThreshold: this.minSpeakingDuration / 1000, // Consider adjusting if needed
-        minSpeechFrames: 1,
-        // Keep preSpeechPadFrames high, recorder runs continuously anyway
-        preSpeechPadFrames: 240,
-        redemptionFrames: 3, // Adjust if needed (frames to wait after speech ends)
+        minSpeechFrames: 1, // Minimal frames needed to trigger start
+        // Keep some padding (e.g., 10 frames = ~160ms at 16kHz/16ms frames)
+        // Adjust based on how much lead-in audio you want
+        preSpeechPadFrames: 10,
+        redemptionFrames: 5, // Frames to wait after speech ends before triggering end
         threshold: this.sensitivity,
+        // Event handlers
         onSpeechStart: () => this.handleSpeechStart(),
-        // onSpeechEnd doesn't need the audio data directly anymore
-        onSpeechEnd: () => this.handleSpeechEnd()
+        // Pass audio data (Float32Array) directly to handleSpeechEnd
+        onSpeechEnd: (audio) => this.handleSpeechEnd(audio)
       });
 
-      // Initialize audio recording
-      this.audioRecorder = new MediaRecorder(stream);
-      this.audioRecorder.addEventListener('dataavailable', (e) => {
-        // Only push chunks if the recorder is currently in the 'recording' state
-        if (e.data.size > 0 && this.audioRecorder && this.audioRecorder.state === 'recording') {
-          this.audioChunks.push(e.data);
-        }
-      });
-
-      // --- Modified 'stop' event listener ---
-      this.audioRecorder.addEventListener('stop', () => {
-        console.log("VADManager: MediaRecorder 'stop' event triggered.");
-
-        // Copy chunks immediately, as we might restart recorder quickly
-        const chunksToProcess = [...this.audioChunks];
-        this.audioChunks = []; // Clear chunks for the next recording session
-
-        // Check if we stopped to process a segment
-        if (this.processingSegment) {
-          console.log("VADManager: Stop was triggered for segment processing.");
-          this.processingSegment = false; // Reset flag
-
-          // Process the copied chunks
-          this.processAudioSegment(chunksToProcess);
-
-          // Restart recorder immediately if VAD is still active
-          if (this.vadStatus.textContent === 'VAD: Active' && this.audioRecorder) {
-            console.log("VADManager: Restarting recorder for next segment.");
-            try {
-              // Check state just in case before starting
-              if (this.audioRecorder.state === 'inactive') {
-                this.audioRecorder.start(100);
-              } else {
-                console.warn(`VADManager: Recorder was not inactive (${this.audioRecorder.state}) before attempting restart.`);
-                // Attempt to stop again and then start? Or just log? For now, log.
-              }
-            } catch (error) {
-              console.error("VADManager: Error restarting MediaRecorder:", error);
-              this.vadStatus.textContent = 'VAD: Error';
-            }
-          } else {
-            console.log(`VADManager: Not restarting recorder. VAD Status: ${this.vadStatus.textContent}`);
-          }
-        } else {
-          // Stop was called manually by VADManager.stop()
-          console.log("VADManager: Stop was triggered manually. Chunks cleared.");
-          // Ensure status reflects inactive state if manually stopped
-          this.vadStatus.textContent = 'VAD: Inactive';
-        }
-      });
-      // --- End Modified 'stop' listener ---
+      // No MediaRecorder setup needed here for VAD capture
 
       this.vadStatus.textContent = 'VAD: Ready';
     } catch (error) {
@@ -119,9 +136,9 @@ class VADManager {
   }
 
   start() {
-    // Ensure VAD and Recorder are initialized
-    if (!this.vad || !this.audioRecorder) {
-      console.error("VADManager: Cannot start, VAD or Recorder not initialized.");
+    // Ensure VAD is initialized
+    if (!this.vad) {
+      console.error("VADManager: Cannot start, VAD not initialized.");
       this.vadStatus.textContent = 'VAD: Error';
       return;
     }
@@ -132,32 +149,18 @@ class VADManager {
     }
 
     console.log("VADManager: start() called");
-    this.audioChunks = []; // Clear previous chunks
-    this.speaking = false; // Reset speaking status
-    this.startTime = null; // Reset start time
-    this.processingSegment = false; // Ensure flag is reset on new start
+    // Reset state
+    this.speaking = false;
+    this.startTime = null;
+    // No chunks or processing flag to reset
 
     try {
-      this.vad.start();
-      // Start recording immediately when VAD becomes active
-      if (this.audioRecorder.state !== 'recording') {
-        console.log("VADManager: Starting MediaRecorder");
-        this.audioRecorder.start(100); // Start with timeslice
-      } else {
-        // This case might happen if stop() failed previously or wasn't called
-        console.warn("VADManager: MediaRecorder was already recording on start().");
-        // Optionally stop and restart to ensure clean state
-        // this.audioRecorder.stop();
-        // this.audioRecorder.start(100);
-      }
+      this.vad.start(); // Start VAD processing
       this.vadStatus.textContent = 'VAD: Active';
     } catch (error) {
-      console.error("VADManager: Error starting VAD or Recorder:", error);
+      console.error("VADManager: Error starting VAD:", error);
       this.vadStatus.textContent = 'VAD: Error';
-      // Attempt to cleanup
-      if (this.audioRecorder && this.audioRecorder.state === 'recording') {
-        this.audioRecorder.stop();
-      }
+      // No recorder cleanup needed
     }
   }
 
@@ -166,11 +169,6 @@ class VADManager {
     // Prevent stopping if already inactive
     if (this.vadStatus.textContent !== 'VAD: Active' && this.vadStatus.textContent !== 'VAD: Speech Detected') {
       console.warn("VADManager: stop() called while already inactive.");
-      // Ensure recorder is stopped if somehow still running
-      if (this.audioRecorder && this.audioRecorder.state === 'recording') {
-        console.warn("VADManager: Forcing recorder stop on inactive state.");
-        this.audioRecorder.stop();
-      }
       return;
     }
 
@@ -184,24 +182,12 @@ class VADManager {
       }
     }
 
-    // --- Ensure processing flag is false for manual stop ---
-    this.processingSegment = false;
-    // ---
+    // No recorder to stop or flags/chunks to clear related to recording
 
-    // Stop recorder if it's running. The 'stop' listener handles cleanup.
-    if (this.audioRecorder && this.audioRecorder.state === 'recording') {
-      console.log(`VADManager: Manually stopping MediaRecorder (state: ${this.audioRecorder.state})`);
-      this.audioRecorder.stop(); // Triggers the 'stop' event listener asynchronously
-    } else {
-      console.log("VADManager: stop() called, but MediaRecorder was not recording or not initialized.");
-      // If recorder wasn't recording, ensure chunks are cleared and status updated
-      this.audioChunks = [];
-      this.vadStatus.textContent = 'VAD: Inactive'; // Set inactive status directly
-    }
-
-    // Reset internal state flags (status is updated in listener or here if not recording)
+    // Reset internal state flags and update status
     this.speaking = false;
     this.startTime = null;
+    this.vadStatus.textContent = 'VAD: Inactive'; // Set inactive status directly
   }
 
   handleSpeechStart() {
@@ -217,7 +203,8 @@ class VADManager {
     }
   }
 
-  handleSpeechEnd() {
+  // Modified to accept audioData (Float32Array) from VAD's onSpeechEnd
+  handleSpeechEnd(audioData) {
     // Only react if we were previously marked as speaking
     if (!this.speaking) {
       // console.log("VADManager: Speech end ignored, wasn't speaking.");
@@ -225,8 +212,9 @@ class VADManager {
     }
 
     const endTime = Date.now();
-    const duration = endTime - this.startTime;
-    console.log(`VADManager: handleSpeechEnd. Duration: ${duration}ms`);
+    // Calculate duration based on the time between VAD events
+    const speechDuration = endTime - this.startTime;
+    console.log(`VADManager: handleSpeechEnd. Detected speech duration: ${speechDuration}ms`);
 
     const wasSpeaking = this.speaking;
     this.speaking = false; // Reset speaking flag immediately
@@ -236,75 +224,46 @@ class VADManager {
     }
 
     // Check if the speech met the minimum duration AND we were actually speaking
-    if (wasSpeaking && duration >= this.minSpeakingDuration && this.audioChunks.length > 0) {
-      console.log(`VADManager: Sufficient speech detected (${duration}ms). Stopping recorder to process segment.`);
+    // The VAD's positiveSpeechThreshold likely already filters short speech,
+    // but this adds an extra check based on event timing.
+    if (wasSpeaking && speechDuration >= this.minSpeakingDuration) {
+      console.log(`VADManager: Sufficient speech detected (${speechDuration}ms). Processing audio segment.`);
 
-      // --- Stop Recorder for Processing ---
-      if (this.audioRecorder && this.audioRecorder.state === 'recording') {
-        // Set flag *before* stopping
-        this.processingSegment = true;
-        // Stop the recorder. The 'stop' event listener will handle processing and restarting.
-        this.audioRecorder.stop();
-      } else {
-        console.warn(`VADManager: Cannot stop recorder to process segment. State: ${this.audioRecorder?.state}. Discarding chunks.`);
-        // If recorder wasn't recording, just discard chunks.
-        this.audioChunks = [];
-        this.processingSegment = false; // Ensure flag is false
-      }
-      // --- End Stop Recorder ---
+      // Process the audio data provided directly by the VAD
+      this.processAudioSegment(audioData);
 
     } else {
-      // Handle short speech or no chunks
+      // Handle short speech detected by timing (might be redundant)
       if (wasSpeaking) {
-        if (this.audioChunks.length === 0) {
-          console.log(`VADManager: Speech ended (${duration}ms), but no audio chunks collected. Discarding.`);
-        } else {
-          console.log(`VADManager: Speech too short (${duration}ms). Discarding ${this.audioChunks.length} chunks.`);
-        }
+        console.log(`VADManager: Speech too short based on event timing (${speechDuration}ms). Discarding.`);
       }
-      // Clear chunks if speech was short or recorder wasn't stopped for processing
-      this.audioChunks = [];
-      this.processingSegment = false; // Ensure flag is false
+      // No chunks to clear, audioData is local to this call
     }
   }
 
-  processAudioSegment(audioChunks) {
-    // Now accepts the specific chunks for this segment
-
-    if (!audioChunks || audioChunks.length === 0) {
-      console.warn("VADManager: processAudioSegment called, but no audio chunks provided.");
+  // Modified to accept Float32Array and convert to WAV Blob
+  processAudioSegment(audioData) {
+    if (!audioData || audioData.length === 0) {
+      console.warn("VADManager: processAudioSegment called, but no audio data provided.");
       return;
     }
 
-    console.log(`VADManager: Processing audio segment from ${audioChunks.length} chunks.`);
+    console.log(`VADManager: Processing audio segment (Float32Array length: ${audioData.length}).`);
 
-    // Determine Blob type, preferring opus codec
-    let blobType = 'audio/webm'; // Default fallback
-    try {
-      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        blobType = 'audio/webm;codecs=opus';
-      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
-        blobType = 'audio/ogg;codecs=opus'; // Alternative if webm/opus not supported
-      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-        blobType = 'audio/webm'; // Plain webm
-      } else {
-        console.warn("VADManager: Neither webm/opus nor ogg/opus supported. Using default 'audio/webm'. Playback issues possible.");
-      }
-      console.log(`VADManager: Using blob type: ${blobType}`);
-    } catch (e) { console.error("VADManager: Error checking media types", e); }
-
-    // Create the Blob from the passed-in chunks
+    // Convert Float32Array to WAV Blob
+    // Attempt to get sample rate from VAD options, default to 16000
+    const sampleRate = this.vad?.options?.sampleRate || 16000;
     let audioBlob;
     try {
-      audioBlob = new Blob(audioChunks, { type: blobType });
-      console.log(`VADManager: Audio blob created. Size: ${audioBlob.size}, Type: ${audioBlob.type}`);
+      // Use the helper function (defined globally above)
+      audioBlob = float32ArrayToWavBlob(audioData, sampleRate);
+      console.log(`VADManager: Audio blob created (WAV). Size: ${audioBlob.size}, Type: ${audioBlob.type}`);
     } catch (error) {
-      console.error("VADManager: Error creating Blob:", error);
-      // Chunks were already copied, no need to clear the main array here
+      console.error("VADManager: Error creating WAV Blob:", error);
       return;
     }
 
-    // Chunks are local to this function call now, no need to clear this.audioChunks here
+    // No need to clear chunks here
 
     const audioUrl = URL.createObjectURL(audioBlob);
 
@@ -322,9 +281,7 @@ class VADManager {
       // Check for invalid duration (Infinity, NaN, or sometimes 0)
       if (!isFinite(reportedDuration) || reportedDuration <= 0) {
         console.warn(`VADManager: Audio element reported invalid duration (${reportedDuration}). Proceeding, but check minAudioDuration logic.`);
-        // If duration is invalid, we might skip the minAudioDuration check or handle it differently
-        // For now, let's assume if we got here, it's likely valid speech based on VAD timing.
-        // Add to page unless blob size was zero (already checked by chunk length).
+        // Add to page unless blob size was zero (already checked by audioData.length)
         const audioOutput = document.getElementById('audio-output');
         if (audioOutput) {
           console.log("VADManager: Adding audio element to page (despite invalid duration report).");
@@ -335,7 +292,8 @@ class VADManager {
         }
 
       } else if (reportedDurationMs < this.minAudioDuration) {
-        // Check against minAudioDuration using the reported duration
+        // Check against minAudioDuration using the reported duration from the WAV file
+        // This duration includes the preSpeechPadFrames from VAD
         console.log(`VADManager: Final audio duration (${reportedDurationMs}ms) is less than minAudioDuration (${this.minAudioDuration}ms). Discarding.`);
         URL.revokeObjectURL(audioUrl); // Clean up blob URL
       } else {
@@ -357,14 +315,8 @@ class VADManager {
       URL.revokeObjectURL(audioUrl); // Clean up blob URL on error
     };
 
-    // Handle cases where metadata never loads (e.g., unsupported codec by <audio> element)
-    // Add a timeout? If metadata doesn't load after ~2 seconds, maybe add it anyway or log error.
-    // setTimeout(() => {
-    //     if (!audioElement.readyState >= 1) { // HAVE_METADATA or higher
-    //         console.warn("VADManager: Audio metadata did not load within timeout. Adding element anyway.");
-    //         // Add logic here if needed
-    //     }
-    // }, 2000);
+    // Optional: Handle cases where metadata never loads
+    // setTimeout(() => { ... }, 2000);
   }
 }
 
