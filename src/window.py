@@ -88,10 +88,6 @@ class MainWindow(QMainWindow):
         page.featurePermissionRequested.connect(self.handle_permission_request)
         self.web_view.setPage(page)
 
-        # Set up context menu
-        self.web_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.web_view.customContextMenuRequested.connect(self.show_context_menu)
-
         self.setCentralWidget(self.web_view)
 
         print(f"Loading URL: {self.server_url}")
@@ -210,29 +206,6 @@ class MainWindow(QMainWindow):
                 QWebEnginePage.PermissionPolicy.PermissionDeniedByUser
             )
 
-    def show_context_menu(self, position):
-        menu = QMenu()
-        inspect_action = menu.addAction("Inspect")
-        inspect_action.triggered.connect(self.open_dev_tools)
-        menu.exec(self.web_view.mapToGlobal(position))
-
-    def open_dev_tools(self):
-        print(f"DevTools available via browser at chrome://inspect/#devices (Port {os.environ.get('QTWEBENGINE_REMOTE_DEBUGGING', 'N/A')})")
-
-        js_code = """
-        console.log('Debug mode enabled');
-        console.log('AudioManager status:', {
-            mediaDevices: !!navigator.mediaDevices,
-            getUserMedia: !!navigator.mediaDevices?.getUserMedia,
-            audioManager: !!window.audioManager
-        });
-        console.log('VADManager status:', {
-            vadManager: !!window.vadManager
-        });
-        console.log('mainWindow object (from JS):', window.mainWindow);
-        """
-        self.web_view.page().runJavaScript(js_code)
-
     @property
     def is_recording(self):
         return self._is_recording
@@ -253,13 +226,7 @@ class MainWindow(QMainWindow):
     def on_mic_status_changed(self, is_active: bool):
         print(f"MainWindow: Received mic status update from JS: {is_active}")
         self._is_recording = is_active
-        # Update tray icon based on status (optional)
-        # current_dir = os.path.dirname(os.path.abspath(__file__))
-        # icon_name = "mic-active.png" if is_active else "mic-inactive.png"
-        # icon_path = os.path.join(current_dir, "icons", icon_name)
-        # self.tray_icon.setIcon(QIcon(icon_path))
 
-    # --- New Slot for Transcription ---
     @pyqtSlot(str)
     def transcribe_audio_b64(self, base64_audio_data: str):
         """
@@ -269,9 +236,10 @@ class MainWindow(QMainWindow):
         if self.transcriber:
             # Run transcription in a separate thread? For now, run synchronously.
             # Consider threading for long transcriptions to avoid blocking the UI thread.
-            transcription = self.transcriber.transcribe_base64(base64_audio_data)
+            transcription, transcription_time = self.transcriber.transcribe_base64(base64_audio_data)
             print("-" * 20)
             print(f"PYTHON TRANSCRIPTION: {transcription}")
+            print(f"Transcription time: {transcription_time:.2f} seconds")
             print("-" * 20)
             # Optionally, send the transcription back to JS or handle it here
             # self.web_view.page().runJavaScript(f"console.log('Python transcription: {transcription}');")
