@@ -25,3 +25,4 @@ build/
 # Project specific
 config/settings.conf
 web/node_modules/
+languagetool/ngrams
