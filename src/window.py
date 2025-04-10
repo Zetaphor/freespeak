@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
 
         # Get path to single icon
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_path = os.path.join(current_dir, "icons", "mic-inactive.png")
+        icon_path = os.path.join(current_dir, "icons", "icon.png")
 
         # Set static icon
         icon = QIcon(icon_path)
