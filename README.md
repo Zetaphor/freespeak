@@ -89,8 +89,8 @@ I built this as an simple alternative to [Talon](https://talonvoice.com) since t
     ngrams/
     ├─ en/
     │  ├─ 1grams/
-    │  ├─ 2grams
-    │  ├─ 3grams
+    │  ├─ 2grams/
+    │  ├─ 3grams/
     ├─ es/
     │  ├─ 1grams/
     │  ├─ 2grams/
