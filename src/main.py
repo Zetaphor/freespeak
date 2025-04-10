@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 from PyQt6.QtWidgets import QApplication
-# from PyQt6.QtCore import QTimer # No longer needed here? Keep if used elsewhere.
 import sys
 import os
 from pydbus import SessionBus
 import http.server
 import socketserver
 import threading
-import time # For potential delays
+import time
 
 from window import MainWindow
 from dbus_service import DictationService
@@ -25,11 +24,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         # Python 3.7+ requires directory to be passed during init
         super().__init__(*args, directory=WEB_DIR, **kwargs)
-
-    def log_message(self, format, *args):
-        # Quieter logging or customize as needed
-        # super().log_message(format, *args)
-        pass
 
 def start_server():
     """Starts the HTTP server in a separate daemon thread."""
@@ -52,7 +46,6 @@ def start_server():
 
 
 def main():
-    # Ensure the application doesn't quit when last window is closed
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
@@ -67,8 +60,6 @@ def main():
         print("Transcriber initialized successfully.")
     except RuntimeError as e:
         print(f"Fatal Error: {e}")
-        # Optionally show a message box to the user
-        # QMessageBox.critical(None, "Initialization Error", str(e))
         sys.exit(1)
     except Exception as e:
         print(f"An unexpected error occurred during transcriber initialization: {e}")

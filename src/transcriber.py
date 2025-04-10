@@ -75,8 +75,6 @@ class Transcriber:
             print("Processing audio for transcription...")
             start_time = time.time()
             # Ensure the processor gets the correct sampling rate if needed
-            # The Moonshine processor might infer it, but explicitly setting is safer if required.
-            # Check processor documentation if issues arise. For now, assume default works.
             inputs = processor(audio_array, sampling_rate=sample_rate, return_tensors="pt")
 
             # Move inputs to the same device as the model
@@ -98,37 +96,3 @@ class Transcriber:
             import traceback
             traceback.print_exc()
             return "[Transcription Error]"
-
-# Example usage (optional, for testing the module directly)
-if __name__ == '__main__':
-    try:
-        print("Initializing transcriber for direct test...")
-        transcriber = Transcriber()
-        print("Transcriber initialized.")
-
-        # Create a dummy Base64 audio string (e.g., 1 second of silence)
-        sample_rate = 16000
-        duration = 1
-        num_samples = sample_rate * duration
-        dummy_audio = np.zeros(num_samples, dtype=np.float32)
-        dummy_bytes = struct.pack(f'<{num_samples}f', *dummy_audio)
-        dummy_base64 = base64.b64encode(dummy_bytes).decode('utf-8')
-
-        print("\nTesting transcription with dummy audio (silence)...")
-        result = transcriber.transcribe_base64(dummy_base64)
-        print(f"Dummy audio transcription: {result}")
-
-        # You might need a real audio sample encoded to Base64 for a meaningful test
-        # print("\nTesting with a real audio sample (if available)...")
-        # try:
-        #     with open("test_audio_float32.b64", "r") as f:
-        #         real_base64 = f.read()
-        #     result = transcriber.transcribe_base64(real_base64)
-        #     print(f"Real audio transcription: {result}")
-        # except FileNotFoundError:
-        #     print("Skipping real audio test: test_audio_float32.b64 not found.")
-
-    except RuntimeError as e:
-        print(f"Failed to initialize transcriber: {e}")
-    except Exception as e:
-        print(f"An error occurred during testing: {e}")
