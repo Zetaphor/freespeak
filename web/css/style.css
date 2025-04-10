@@ -2,16 +2,17 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   margin: 0;
   padding: 20px;
-  background: #f5f5f5;
+  background: #1a1a1a;
+  color: #e0e0e0;
 }
 
 #app {
   max-width: 800px;
   margin: 0 auto;
-  background: white;
+  background: #2c2c2c;
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 #status-bar {
@@ -19,8 +20,9 @@ body {
   justify-content: space-between;
   margin-bottom: 20px;
   padding: 10px;
-  background: #f0f0f0;
+  background: #3a3a3a;
   border-radius: 4px;
+  color: #cccccc;
 }
 
 #controls {
@@ -32,30 +34,33 @@ select {
   padding: 8px 16px;
   margin-right: 10px;
   border-radius: 4px;
-  border: 1px solid #ddd;
+  border: 1px solid #555;
+  background: #444;
+  color: #e0e0e0;
 }
 
 button {
-  background: #007bff;
+  background: #28a745;
   color: white;
   border: none;
   cursor: pointer;
 }
 
 button:hover {
-  background: #0056b3;
+  background: #218838;
 }
 
 .settings-section {
   margin-bottom: 20px;
   padding: 15px;
-  background: #f0f0f0;
+  background: #3a3a3a;
   border-radius: 4px;
 }
 
 .settings-section h3 {
   margin-top: 0;
   margin-bottom: 15px;
+  color: #f0f0f0;
 }
 
 .setting-group {
@@ -65,6 +70,73 @@ button:hover {
 .setting-group label {
   display: block;
   margin-bottom: 5px;
+  color: #cccccc;
+}
+
+input[type="number"],
+input[type="range"],
+select {
+  background-color: #555;
+  color: #e0e0e0;
+  border: 1px solid #666;
+  padding: 5px;
+  border-radius: 4px;
+}
+
+input[type="range"] {
+  padding: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: transparent;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 8px;
+  cursor: pointer;
+  background: #555;
+  border-radius: 4px;
+  border: 1px solid #666;
+}
+
+input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: 8px;
+  cursor: pointer;
+  background: #555;
+  border-radius: 4px;
+  border: 1px solid #666;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid #1c7430;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #28a745;
+  cursor: pointer;
+  margin-top: -6px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  border: 1px solid #1c7430;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #28a745;
+  cursor: pointer;
+}
+
+input[type="range"]:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.5);
+}
+
+input[type="range"]:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.5);
 }
 
 .range-with-value {
@@ -80,6 +152,7 @@ button:hover {
 .range-with-value span {
   min-width: 2.5em;
   text-align: right;
+  color: #cccccc;
 }
 
 #audio-output {
@@ -91,4 +164,5 @@ button:hover {
 
 #audio-output audio {
   width: 100%;
+  filter: invert(95%) sepia(10%) saturate(0%) hue-rotate(180deg) brightness(100%) contrast(90%);
 }
