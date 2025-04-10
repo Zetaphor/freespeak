@@ -51,11 +51,10 @@ I built this as an simple alternative to [Talon](https://talonvoice.com) since t
 
     You then need to define a new udev rule that will give the input group permanent write access to the uinput device (this will give ydotool write access too).
 
-    echo '## Give ydotoold access to the uinput device
-
     #### Solution by https://github.com/ReimuNotMoe/ydotool/issues/25#issuecomment-535842993
 
     ```bash
+    echo '## Give ydotoold access to the uinput device
     KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"
     ' | sudo tee /etc/udev/rules.d/80-uinput.rules > /dev/null
     ```
