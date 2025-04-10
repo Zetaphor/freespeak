@@ -50,17 +50,32 @@ function floatTo16BitPCM(output, offset, input) {
   }
 }
 
+function float32ArrayToBase64(float32Array) {
+  try {
+    // Get the underlying ArrayBuffer
+    const buffer = float32Array.buffer;
+    // Create a Uint8Array view of the buffer
+    const bytes = new Uint8Array(buffer);
+    // Convert bytes to a binary string
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    // Encode the binary string to Base64
+    return window.btoa(binary);
+  } catch (error) {
+    console.error("Error converting Float32Array to Base64:", error);
+    return null; // Return null or empty string on error
+  }
+}
+// --- END NEW HELPER ---
+
 class VADManager {
   constructor() {
     this.vad = null;
-    // No longer need MediaRecorder related properties for VAD
-    // this.audioContext = null;
-    // this.mediaStreamSource = null;
     this.speaking = false;
-    // this.audioChunks = []; // Removed
     this.startTime = null;
-    // this.audioRecorder = null; // Removed (unless needed for other purposes)
-    // this.processingSegment = false; // Removed
 
     // Settings
     this.minSpeakingDuration = 500; // Used to check time between speech start/end events
@@ -79,11 +94,16 @@ class VADManager {
   }
 
   bindEventListeners() {
+    if (!this.sensitivityInput || !this.minSpeakingInput || !this.minAudioInput) {
+      console.warn("VADManager: One or more control elements not found. Skipping event listener binding.");
+      return;
+    }
     this.sensitivityInput.addEventListener('input', (e) => {
       this.sensitivity = parseFloat(e.target.value);
       this.sensitivityValue.textContent = this.sensitivity;
-      if (this.vad) {
+      if (this.vad && this.vad.options) {
         // Update VAD threshold dynamically
+        console.log(`VADManager: Sensitivity changed to ${this.sensitivity}`);
         this.vad.options.threshold = this.sensitivity;
       }
     });
@@ -91,44 +111,48 @@ class VADManager {
     this.minSpeakingInput.addEventListener('input', (e) => {
       this.minSpeakingDuration = parseInt(e.target.value);
       // Update VAD positive/negative speech thresholds dynamically
-      if (this.vad) {
+      if (this.vad && this.vad.options) {
         const durationSeconds = this.minSpeakingDuration / 1000;
-        this.vad.options.positiveSpeechThreshold = durationSeconds;
-        // Keep negative threshold same or adjust as needed
-        this.vad.options.negativeSpeechThreshold = durationSeconds;
+        console.log(`VADManager: Min Speaking Duration changed to ${this.minSpeakingDuration}ms`);
       }
     });
 
     this.minAudioInput.addEventListener('input', (e) => {
+      console.log(`VADManager: Min Audio Duration changed to ${this.minAudioDuration}ms`);
       this.minAudioDuration = parseInt(e.target.value);
     });
   }
 
-  // Stream is still needed for MicVAD initialization
   async initialize(stream) {
     try {
-      // Initialize VAD
-      this.vad = await vad.MicVAD.new({
-        // Pass the stream directly to MicVAD
+      if (!vad || !vad.MicVAD) {
+        console.error("VAD library (vad.MicVAD) not loaded or available.");
+        this.vadStatus.textContent = 'VAD: Error (Library missing)';
+        return;
+      }
+
+      // Default VAD options
+      const vadOptions = {
         stream: stream,
-        // VAD settings from properties
-        positiveSpeechThreshold: this.minSpeakingDuration / 1000,
-        negativeSpeechThreshold: this.minSpeakingDuration / 1000, // Consider adjusting if needed
-        minSpeechFrames: 1, // Minimal frames needed to trigger start
-        // Keep some padding (e.g., 10 frames = ~160ms at 16kHz/16ms frames)
-        // Adjust based on how much lead-in audio you want
-        preSpeechPadFrames: 10,
-        redemptionFrames: 5, // Frames to wait after speech ends before triggering end
-        threshold: this.sensitivity,
+        threshold: this.sensitivity, // Use current sensitivity
+        sampleRate: 16000, // Explicitly set expected sample rate
+
         // Event handlers
         onSpeechStart: () => this.handleSpeechStart(),
         // Pass audio data (Float32Array) directly to handleSpeechEnd
         onSpeechEnd: (audio) => this.handleSpeechEnd(audio)
-      });
+      };
+
+      console.log("VADManager: Initializing MicVAD with options:", vadOptions);
+
+      // Initialize VAD
+      this.vad = await vad.MicVAD.new(vadOptions);
 
       // No MediaRecorder setup needed here for VAD capture
 
       this.vadStatus.textContent = 'VAD: Ready';
+      console.log("VADManager: VAD Initialized successfully.");
+
     } catch (error) {
       console.error('Error initializing VAD:', error);
       this.vadStatus.textContent = 'VAD: Error';
@@ -143,12 +167,11 @@ class VADManager {
       return;
     }
     // Prevent starting if already active
-    if (this.vadStatus.textContent === 'VAD: Active') {
+    if (this.vadStatus.textContent === 'VAD: Active' || this.vadStatus.textContent === 'VAD: Speech Detected') {
       console.warn("VADManager: start() called while already active.");
       return;
     }
 
-    console.log("VADManager: start() called");
     // Reset state
     this.speaking = false;
     this.startTime = null;
@@ -157,6 +180,7 @@ class VADManager {
     try {
       this.vad.start(); // Start VAD processing
       this.vadStatus.textContent = 'VAD: Active';
+      console.log("VADManager: VAD started.");
     } catch (error) {
       console.error("VADManager: Error starting VAD:", error);
       this.vadStatus.textContent = 'VAD: Error';
@@ -165,7 +189,6 @@ class VADManager {
   }
 
   stop() {
-    console.log("VADManager: stop() called");
     // Prevent stopping if already inactive
     if (this.vadStatus.textContent !== 'VAD: Active' && this.vadStatus.textContent !== 'VAD: Speech Detected') {
       console.warn("VADManager: stop() called while already inactive.");
@@ -175,10 +198,12 @@ class VADManager {
     if (this.vad) {
       try {
         // Use pause() which is standard for MicVAD
-        this.vad.pause();
+        this.vad.pause(); // Use pause instead of stop if it exists
         console.log("VADManager: VAD paused");
       } catch (e) {
-        console.error("VADManager: Error pausing VAD", e);
+        // If pause doesn't exist, maybe try stop or destroy? Check MicVAD API.
+        // For now, log the error.
+        console.error("VADManager: Error pausing VAD (maybe try stop/destroy?):", e);
       }
     }
 
@@ -188,11 +213,12 @@ class VADManager {
     this.speaking = false;
     this.startTime = null;
     this.vadStatus.textContent = 'VAD: Inactive'; // Set inactive status directly
+    console.log("VADManager: VAD stopped/paused and state reset.");
   }
 
   handleSpeechStart() {
     // Only react if VAD is active and we aren't already marked as speaking
-    if (this.vadStatus.textContent.includes('Active') && !this.speaking) {
+    if (this.vadStatus.textContent === 'VAD: Active' && !this.speaking) {
       console.log("VADManager: handleSpeechStart");
       this.speaking = true;
       this.startTime = Date.now(); // Record start time of this speech segment
@@ -203,7 +229,6 @@ class VADManager {
     }
   }
 
-  // Modified to accept audioData (Float32Array) from VAD's onSpeechEnd
   handleSpeechEnd(audioData) {
     // Only react if we were previously marked as speaking
     if (!this.speaking) {
@@ -213,112 +238,76 @@ class VADManager {
 
     const endTime = Date.now();
     // Calculate duration based on the time between VAD events
-    const speechDuration = endTime - this.startTime;
+    const speechDuration = this.startTime ? endTime - this.startTime : 0; // Handle null startTime
     console.log(`VADManager: handleSpeechEnd. Detected speech duration: ${speechDuration}ms`);
 
     const wasSpeaking = this.speaking;
     this.speaking = false; // Reset speaking flag immediately
+    this.startTime = null; // Reset start time
+
     // Reset VAD status ONLY if it wasn't manually stopped already
     if (this.vadStatus.textContent === 'VAD: Speech Detected') {
       this.vadStatus.textContent = 'VAD: Active'; // Ready for next speech or stop
     }
 
     // Check if the speech met the minimum duration AND we were actually speaking
-    // The VAD's positiveSpeechThreshold likely already filters short speech,
+    // The VAD's internal logic likely already filters short speech based on its settings,
     // but this adds an extra check based on event timing.
     if (wasSpeaking && speechDuration >= this.minSpeakingDuration) {
       console.log(`VADManager: Sufficient speech detected (${speechDuration}ms). Processing audio segment.`);
 
       // Process the audio data provided directly by the VAD
-      this.processAudioSegment(audioData);
+      this.processAudioSegment(audioData); // Pass Float32Array
 
     } else {
-      // Handle short speech detected by timing (might be redundant)
+      // Handle short speech detected by timing
       if (wasSpeaking) {
-        console.log(`VADManager: Speech too short based on event timing (${speechDuration}ms). Discarding.`);
+        console.log(`VADManager: Speech too short based on event timing (${speechDuration}ms < ${this.minSpeakingDuration}ms). Discarding.`);
+      } else {
+        console.log("VADManager: Speech end event received, but was not marked as speaking. Discarding.");
       }
       // No chunks to clear, audioData is local to this call
     }
   }
 
-  // Modified to accept Float32Array and convert to WAV Blob
-  processAudioSegment(audioData) {
-    if (!audioData || audioData.length === 0) {
-      console.warn("VADManager: processAudioSegment called, but no audio data provided.");
+  processAudioSegment(audioData) { // Receives Float32Array
+    if (!audioData || !(audioData instanceof Float32Array) || audioData.length === 0) {
+      console.warn("VADManager: processAudioSegment called, but invalid or empty audio data (Float32Array) provided.");
       return;
     }
 
     console.log(`VADManager: Processing audio segment (Float32Array length: ${audioData.length}).`);
 
-    // Convert Float32Array to WAV Blob
-    // Attempt to get sample rate from VAD options, default to 16000
-    const sampleRate = this.vad?.options?.sampleRate || 16000;
-    let audioBlob;
-    try {
-      // Use the helper function (defined globally above)
-      audioBlob = float32ArrayToWavBlob(audioData, sampleRate);
-      console.log(`VADManager: Audio blob created (WAV). Size: ${audioBlob.size}, Type: ${audioBlob.type}`);
-    } catch (error) {
-      console.error("VADManager: Error creating WAV Blob:", error);
-      return;
-    }
+    // --- Send data to Python for transcription ---
+    console.log("VADManager: Converting audio data to Base64...");
+    const base64AudioData = float32ArrayToBase64(audioData); // Use helper function
 
-    // No need to clear chunks here
-
-    const audioUrl = URL.createObjectURL(audioBlob);
-
-    // Create audio element
-    const audioElement = document.createElement('audio');
-    audioElement.src = audioUrl;
-    audioElement.controls = true;
-    audioElement.preload = 'metadata'; // Request metadata loading
-
-    audioElement.onloadedmetadata = () => {
-      const reportedDuration = audioElement.duration;
-      const reportedDurationMs = reportedDuration * 1000;
-      console.log(`VADManager: Audio element 'loadedmetadata'. Reported duration: ${reportedDuration}s (${reportedDurationMs}ms)`);
-
-      // Check for invalid duration (Infinity, NaN, or sometimes 0)
-      if (!isFinite(reportedDuration) || reportedDuration <= 0) {
-        console.warn(`VADManager: Audio element reported invalid duration (${reportedDuration}). Proceeding, but check minAudioDuration logic.`);
-        // Add to page unless blob size was zero (already checked by audioData.length)
-        const audioOutput = document.getElementById('audio-output');
-        if (audioOutput) {
-          console.log("VADManager: Adding audio element to page (despite invalid duration report).");
-          audioOutput.insertBefore(audioElement, audioOutput.firstChild);
-        } else {
-          console.error("VADManager: Audio output element not found. Discarding audio URL.");
-          URL.revokeObjectURL(audioUrl);
-        }
-
-      } else if (reportedDurationMs < this.minAudioDuration) {
-        // Check against minAudioDuration using the reported duration from the WAV file
-        // This duration includes the preSpeechPadFrames from VAD
-        console.log(`VADManager: Final audio duration (${reportedDurationMs}ms) is less than minAudioDuration (${this.minAudioDuration}ms). Discarding.`);
-        URL.revokeObjectURL(audioUrl); // Clean up blob URL
+    if (base64AudioData) {
+      // --- ADD CHECK HERE ---
+      if (typeof window.sendAudioForTranscription === 'function') {
+        console.log(`VADManager: Base64 conversion successful (length: ${base64AudioData.length}). Calling window.sendAudioForTranscription...`);
+        window.sendAudioForTranscription(base64AudioData);
       } else {
-        // Duration is valid and sufficient, add to page
-        console.log(`VADManager: Final audio duration (${reportedDurationMs}ms) is sufficient. Adding audio element to page.`);
-        const audioOutput = document.getElementById('audio-output');
-        if (audioOutput) {
-          audioOutput.insertBefore(audioElement, audioOutput.firstChild);
-        } else {
-          console.error("VADManager: Audio output element not found. Discarding audio URL.");
-          URL.revokeObjectURL(audioUrl); // Clean up if can't add
-        }
+        // This error indicates the bridge isn't ready when VAD needs it.
+        console.error("VADManager Error: window.sendAudioForTranscription is not available or not a function yet. Cannot send audio to Python. Bridge setup might be delayed or failed.");
+        // Optionally, you could queue the data here and try again later,
+        // but that adds complexity. For now, just log the error.
       }
-    };
-
-    audioElement.onerror = (e) => {
-      console.error("VADManager: Error loading audio element:", e);
-      console.error("Blob details:", { size: audioBlob.size, type: audioBlob.type });
-      URL.revokeObjectURL(audioUrl); // Clean up blob URL on error
-    };
-
-    // Optional: Handle cases where metadata never loads
-    // setTimeout(() => { ... }, 2000);
+      // --- END CHECK ---
+    } else {
+      console.error("VADManager: Failed to convert audio data to Base64. Cannot send to Python.");
+    }
+    // --- End sending data ---
   }
 }
 
-// Create global instance
-window.vadManager = new VADManager();
+// Create global instance only after DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  window.vadManager = new VADManager();
+
+  // Now that VADManager exists, try initializing AudioManager if it also waits for DOMContentLoaded
+  // Ensure audio.js also waits for DOMContentLoaded or is loaded after vad.js
+  if (window.AudioManager && !window.audioManager) {
+    window.audioManager = new AudioManager();
+  }
+});
