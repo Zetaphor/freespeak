@@ -75,3 +75,25 @@ I built this as an simple alternative to [Talon](https://talonvoice.com) since t
     ```bash
     docker-compose up -d
     ```
+
+    ### N-gram datasets
+
+    You will want to add the ngram dataset for your language to improve the grammar correction.
+
+    > LanguageTool can make use of large n-gram data sets to detect errors with words that are often confused, like their and there.
+    > Source: https://dev.languagetool.org/finding-errors-using-n-gram-data
+
+    [Download](http://languagetool.org/download/ngram-data/) the ngram dataset for your language and put it in the `ngrams` directory.
+
+    ```
+    ngrams/
+    ├─ en/
+    │  ├─ 1grams/
+    │  │  ├─ 1grams.txt
+    │  │  ├─ 2grams.txt
+    │  │  ├─ 3grams.txt
+    ├─ es/
+    │  ├─ 1grams/
+    │  ├─ 2grams/
+    │  ├─ 3grams/
+    ```
