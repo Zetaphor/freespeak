@@ -83,16 +83,17 @@ I built this as an simple alternative to [Talon](https://talonvoice.com) since t
     > LanguageTool can make use of large n-gram data sets to detect errors with words that are often confused, like their and there.
     > Source: https://dev.languagetool.org/finding-errors-using-n-gram-data
 
-    [Download](http://languagetool.org/download/ngram-data/) the ngram dataset for your language and put it in the `ngrams` directory.
+    [Download](http://languagetool.org/download/ngram-data/) the ngram dataset for your language and put it in the `languagetool/ngrams` directory.
 
     ```
-    ngrams/
-    ├─ en/
-    │  ├─ 1grams/
-    │  ├─ 2grams/
-    │  ├─ 3grams/
-    ├─ es/
-    │  ├─ 1grams/
-    │  ├─ 2grams/
-    │  ├─ 3grams/
+    languagetool/
+    ├─ ngrams/
+    │  ├─ en/
+    │  │  ├─ 1grams/
+    │  │  ├─ 2grams/
+    │  │  ├─ 3grams/
+    │  ├─ es/
+    │  │  ├─ 1grams/
+    │  │  ├─ 2grams/
+    │  │  ├─ 3grams/
     ```
