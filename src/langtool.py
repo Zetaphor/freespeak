@@ -47,7 +47,7 @@ language = "en-US"
 
 
 def langtool_process(text):
-    print("\n\n<<<< " + text)
+    print("<<<< " + text)
 
     # Fix up punctuation first because the grammar parser works better:
     for match, replacement in PUNCTUATION.items():
