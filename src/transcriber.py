@@ -57,25 +57,18 @@ class Transcriber:
         Transcribes audio data provided as a Base64 encoded string
         representing a Float32Array.
         """
-        print(f"Received base64 audio data (first 50 chars): {base64_audio_data[:50]}...")
         audio_array = self._base64_to_float32_numpy(base64_audio_data)
 
         if audio_array.size == 0:
             print("Transcription failed: Could not decode audio data.")
             return "[Transcription Error: Invalid Audio Data]"
 
-        print(f"Decoded audio array shape: {audio_array.shape}, dtype: {audio_array.dtype}")
-
         # Check if audio array is excessively long (e.g., > 30 seconds)
         # Assuming 16kHz sample rate from VAD
         sample_rate = 16000
-        max_duration_seconds = 30
-        if len(audio_array) / sample_rate > max_duration_seconds:
-             print(f"Warning: Audio data is very long ({len(audio_array) / sample_rate:.1f}s). Truncating to {max_duration_seconds}s.")
-             audio_array = audio_array[:sample_rate * max_duration_seconds]
 
         if len(audio_array) == 0:
-             print("Transcription skipped: Audio array is empty after potential truncation.")
+             print("Transcription skipped: Audio array is empty.")
              return "[Transcription Skipped: Empty Audio]"
 
         try:
@@ -89,7 +82,6 @@ class Transcriber:
             # Move inputs to the same device as the model
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-            print("Generating transcription...")
             # Generate transcription using the model
             with torch.no_grad(): # Disable gradient calculations for inference
                  generated_ids = model.generate(**inputs)
@@ -97,9 +89,10 @@ class Transcriber:
             # Decode the generated IDs to text
             # Ensure generated_ids are moved to CPU if they are on GPU for decoding
             transcription = processor.batch_decode(generated_ids.cpu(), skip_special_tokens=True)[0]
-            print(f"Transcription generated in {time.time() - start_time:.2f} seconds.")
+            transcription_time = time.time() - start_time
+            print(f"Transcription generated in {transcription_time:.2f} seconds.")
             print(f"Transcription Result: {transcription}")
-            return transcription
+            return transcription, transcription_time
         except Exception as e:
             print(f"Error during transcription: {e}")
             import traceback
