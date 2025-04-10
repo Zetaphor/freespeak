@@ -27,3 +27,4 @@ config/settings.conf
 web/node_modules/
 languagetool/ngrams
 logs/
+.cursor
