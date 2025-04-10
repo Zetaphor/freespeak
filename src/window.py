@@ -2,14 +2,19 @@ from PyQt6.QtWidgets import QMainWindow, QWidget, QMenu, QSystemTrayIcon, QAppli
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile, QWebEnginePage
 from PyQt6.QtWebChannel import QWebChannel
-from PyQt6.QtCore import QUrl, Qt, pyqtSlot
+from PyQt6.QtCore import QUrl, Qt, pyqtSlot, pyqtSignal
 from PyQt6.QtGui import QIcon
 import os
+import subprocess
 
 # Import the Transcriber type hint (optional but good practice)
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from transcriber import Transcriber
+# Remove Transcriber import if not used directly
+# from typing import TYPE_CHECKING
+# if TYPE_CHECKING:
+#     from transcriber import Transcriber
+
+# Import the language tool processor - Remove if not used directly
+# from langtool import langtool_process
 
 class WebPage(QWebEnginePage):
     def javaScriptConsoleMessage(self, level, message, line, source):
@@ -26,12 +31,14 @@ class WebPage(QWebEnginePage):
         print(f"JS Console[{level_name}]: {message} (line {line}, source: {source})")
 
 class MainWindow(QMainWindow):
-    # Add transcriber parameter to __init__
-    def __init__(self, server_url: str, transcriber: 'Transcriber'):
+    # Define a signal that will carry the base64 audio string
+    audioReceived = pyqtSignal(str)
+
+    # Remove transcriber parameter from __init__
+    def __init__(self, server_url: str):
         super().__init__()
         self.setWindowTitle("Voice Dictation")
         self.server_url = server_url
-        self.transcriber = transcriber # Store the transcriber instance
         self.setup_tray()
         self.setup_ui()
         self._is_recording = False
@@ -230,18 +237,16 @@ class MainWindow(QMainWindow):
     @pyqtSlot(str)
     def transcribe_audio_b64(self, base64_audio_data: str):
         """
-        Receives Base64 encoded audio data from JavaScript and transcribes it.
+        Receives Base64 encoded audio data from JavaScript and emits a signal.
+        The actual transcription and typing will be handled elsewhere.
         """
-        print("MainWindow: Received audio data for transcription via QWebChannel.")
-        if self.transcriber:
-            # Run transcription in a separate thread? For now, run synchronously.
-            # Consider threading for long transcriptions to avoid blocking the UI thread.
-            transcription, transcription_time = self.transcriber.transcribe_base64(base64_audio_data)
-            print("-" * 20)
-            print(f"PYTHON TRANSCRIPTION: {transcription}")
-            print(f"Transcription time: {transcription_time:.2f} seconds")
-            print("-" * 20)
-            # Optionally, send the transcription back to JS or handle it here
-            # self.web_view.page().runJavaScript(f"console.log('Python transcription: {transcription}');")
-        else:
-            print("MainWindow: Error - Transcriber not available.")
+        print("MainWindow: Received audio data via QWebChannel. Emitting signal.")
+        # Emit the signal with the audio data
+        self.audioReceived.emit(base64_audio_data)
+        # Remove the transcription, langtool processing, and ydotool logic from here
+        # if self.transcriber:
+        #     # Run transcription
+        #     raw_transcription, transcription_time = self.transcriber.transcribe_base64(base64_audio_data)
+        #     # ... (removed transcription logic) ...
+        # else:
+        #     print("MainWindow: Error - Transcriber not available.") # This check is no longer needed here
